@@ -2,6 +2,15 @@
   "version": 4,
   "targets": {
     "net10.0-windows": {
+      "Haukcode.Mdns/1.1.23": {
+        "type": "package",
+        "compile": {
+          "lib/net8.0/Mdns.dll": {}
+        },
+        "runtime": {
+          "lib/net8.0/Mdns.dll": {}
+        }
+      },
       "AirStream.AirPlay/1.0.0": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v10.0",
@@ -42,7 +51,8 @@
         "type": "project",
         "framework": ".NETCoreApp,Version=v10.0",
         "dependencies": {
-          "AirStream.Core": "1.0.0"
+          "AirStream.Core": "1.0.0",
+          "Haukcode.Mdns": "1.1.23"
         },
         "compile": {
           "bin/placeholder/AirStream.Discovery.dll": {}
@@ -54,6 +64,19 @@
     }
   },
   "libraries": {
+    "Haukcode.Mdns/1.1.23": {
+      "sha512": "7b4cJcGmPRxC5VJYE84XFUB9GMXVVf1BZXSUtpp/3UCj7NNodqIzfMRqs6C24ZX6/GertCVjjA04jWYfgHun+Q==",
+      "type": "package",
+      "path": "haukcode.mdns/1.1.23",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "README_NUGET.md",
+        "haukcode.mdns.1.1.23.nupkg.sha512",
+        "haukcode.mdns.nuspec",
+        "lib/net8.0/Mdns.dll"
+      ]
+    },
     "AirStream.AirPlay/1.0.0": {
       "type": "project",
       "path": "../AirStream.AirPlay/AirStream.AirPlay.csproj",

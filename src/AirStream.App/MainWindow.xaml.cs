@@ -1,23 +1,79 @@
-﻿using System.Text;
+﻿
+using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+using AirStream.Core.Models;
+using AirStream.Discovery;
 
 namespace AirStream.App;
 
 public partial class MainWindow : Window
 {
-    private bool _isConnected = false;
+    private bool _isConnected;
+
+    private readonly AirPlayDiscoveryService _discovery;
+
+    private readonly ObservableCollection<AirPlayDevice> _devices = new();
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _discovery = new AirPlayDiscoveryService();
+
+        DeviceComboBox.ItemsSource = _devices;
+
+        _discovery.DeviceFound += OnDeviceFound;
+        _discovery.DeviceLost += OnDeviceLost;
+
+        _discovery.Start();
+
+        Closed += (_, _) => _discovery.Dispose();
+    }
+
+    private void OnDeviceFound(AirPlayDevice device)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (_devices.Any(d => d.Id == device.Id))
+                return;
+
+            _devices.Add(device);
+
+            UpdateDeviceSearchText();
+        });
+    }
+
+    private void OnDeviceLost(string deviceId)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var device = _devices.FirstOrDefault(
+                d => d.Id == deviceId);
+
+            if (device != null)
+                _devices.Remove(device);
+
+            UpdateDeviceSearchText();
+        });
+    }
+
+    private void UpdateDeviceSearchText()
+    {
+        DeviceSearchText.Text = _devices.Count == 0
+            ? "Searching for AirPlay devices..."
+            : $"{_devices.Count} AirPlay services found";
+    }
+
+    private void DeviceComboBox_SelectionChanged(
+        object sender,
+        SelectionChangedEventArgs e)
+    {
+        if (DeviceComboBox.SelectedItem is AirPlayDevice device)
+        {
+            DeviceSearchText.Text = $"Selected: {device.Name}";
+        }
     }
 
     private void ConnectButton_Click(
@@ -30,8 +86,7 @@ public partial class MainWindow : Window
         {
             StatusText.Text = "Connected (Demo)";
             StatusIndicator.Fill =
-                new SolidColorBrush(
-                    Color.FromRgb(34, 197, 94));
+                new SolidColorBrush(Color.FromRgb(34, 197, 94));
 
             ConnectButton.Content = "Disconnect";
         }
@@ -39,10 +94,9 @@ public partial class MainWindow : Window
         {
             StatusText.Text = "Not connected";
             StatusIndicator.Fill =
-                new SolidColorBrush(
-                    Color.FromRgb(100, 116, 139));
+                new SolidColorBrush(Color.FromRgb(100, 116, 139));
 
-            ConnectButton.Content = "Connect to HomePod";
+            ConnectButton.Content = "Connect";
         }
     }
 
@@ -52,8 +106,7 @@ public partial class MainWindow : Window
     {
         if (VolumeText != null)
         {
-            VolumeText.Text =
-                $"{(int)VolumeSlider.Value}%";
+            VolumeText.Text = $"{(int)VolumeSlider.Value}%";
         }
     }
 }

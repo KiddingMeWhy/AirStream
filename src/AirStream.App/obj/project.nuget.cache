@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "Jo5M/e30zx8=",
+  "dgSpecHash": "GyCOA2FpFNk=",
   "success": true,
   "projectFilePath": "C:\\Programming\\Projects\\AirStream\\src\\AirStream.App\\AirStream.App.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "C:\\Users\\drume\\.nuget\\packages\\haukcode.mdns\\1.1.23\\haukcode.mdns.1.1.23.nupkg.sha512"
+  ],
   "logs": []
 }
