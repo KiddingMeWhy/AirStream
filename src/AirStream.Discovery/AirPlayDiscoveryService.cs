@@ -10,10 +10,13 @@ public sealed class AirPlayDiscoveryService : IDisposable
     private readonly MdnsBrowser _airPlayBrowser;
     private readonly MdnsBrowser _raopBrowser;
 
-    private readonly ConcurrentDictionary<string, AirPlayDevice>
-        _devices = new();
+    private readonly ConcurrentDictionary<string, ServiceEntry>
+        _services = new();
+
+    private readonly object _sync = new();
 
     public event Action<AirPlayDevice>? DeviceFound;
+    public event Action<AirPlayDevice>? DeviceUpdated;
     public event Action<string>? DeviceLost;
 
     public AirPlayDiscoveryService()
@@ -22,16 +25,16 @@ public sealed class AirPlayDiscoveryService : IDisposable
         _raopBrowser = new MdnsBrowser("_raop._tcp");
 
         _airPlayBrowser.ServiceFound +=
-            service => AddDevice(service, "_airplay._tcp");
+            service => AddService(service, "_airplay._tcp");
 
         _raopBrowser.ServiceFound +=
-            service => AddDevice(service, "_raop._tcp");
+            service => AddService(service, "_raop._tcp");
 
         _airPlayBrowser.ServiceLost +=
-            service => RemoveDevice(service, "_airplay._tcp");
+            service => RemoveService(service, "_airplay._tcp");
 
         _raopBrowser.ServiceLost +=
-            service => RemoveDevice(service, "_raop._tcp");
+            service => RemoveService(service, "_raop._tcp");
     }
 
     public void Start()
@@ -40,42 +43,142 @@ public sealed class AirPlayDiscoveryService : IDisposable
         _raopBrowser.Start();
     }
 
-    private void AddDevice(
+    private void AddService(
         ServiceProfile service,
         string serviceType)
     {
-        var key = $"{serviceType}|{service.FullInstanceName}";
+        var serviceKey =
+            $"{serviceType}|{service.FullInstanceName}";
 
-        var device = new AirPlayDevice
-        {
-            Id = key,
-            Name = service.InstanceName,
-            Hostname = service.Hostname,
-            Port = service.Port,
-            ServiceType = serviceType
-        };
+        var hostname = service.Hostname.TrimEnd('.');
 
-        if (_devices.TryAdd(key, device))
+        var name = GetFriendlyName(service.InstanceName, serviceType);
+
+        var deviceId = GetDeviceId(hostname, name);
+
+        var entry = new ServiceEntry(
+            serviceKey,
+            deviceId,
+            name,
+            hostname,
+            service.Port,
+            serviceType);
+
+        lock (_sync)
         {
-            DeviceFound?.Invoke(device);
+            var alreadyExists = _services.ContainsKey(serviceKey);
+
+            _services[serviceKey] = entry;
+
+            var device = BuildDevice(deviceId);
+
+            if (device == null)
+                return;
+
+            if (alreadyExists)
+                DeviceUpdated?.Invoke(device);
+            else if (_services.Values.Count(s => s.DeviceId == deviceId) == 1)
+                DeviceFound?.Invoke(device);
+            else
+                DeviceUpdated?.Invoke(device);
         }
     }
 
-    private void RemoveDevice(
+    private void RemoveService(
         ServiceProfile service,
         string serviceType)
     {
-        var key = $"{serviceType}|{service.FullInstanceName}";
+        var serviceKey =
+            $"{serviceType}|{service.FullInstanceName}";
 
-        if (_devices.TryRemove(key, out _))
+        lock (_sync)
         {
-            DeviceLost?.Invoke(key);
+            if (!_services.TryRemove(serviceKey, out var removed))
+                return;
+
+            var remaining = BuildDevice(removed.DeviceId);
+
+            if (remaining == null)
+            {
+                DeviceLost?.Invoke(removed.DeviceId);
+            }
+            else
+            {
+                DeviceUpdated?.Invoke(remaining);
+            }
         }
+    }
+
+    private AirPlayDevice? BuildDevice(string deviceId)
+    {
+        var entries = _services.Values
+            .Where(s => s.DeviceId == deviceId)
+            .ToArray();
+
+        if (entries.Length == 0)
+            return null;
+
+        var airPlay = entries.FirstOrDefault(
+            s => s.ServiceType == "_airplay._tcp");
+
+        var raop = entries.FirstOrDefault(
+            s => s.ServiceType == "_raop._tcp");
+
+        var preferred = airPlay ?? raop!;
+
+        return new AirPlayDevice
+        {
+            Id = deviceId,
+            Name = preferred.Name,
+            Hostname = preferred.Hostname,
+            AirPlayPort = airPlay?.Port,
+            RaopPort = raop?.Port,
+            HasAirPlay = airPlay != null,
+            HasRaop = raop != null
+        };
+    }
+
+    private static string GetFriendlyName(
+        string instanceName,
+        string serviceType)
+    {
+        var name = instanceName;
+
+        // RAOP names often start with a hardware identifier:
+        // 1EA0FEDF6486@Bedroom
+
+        if (serviceType == "_raop._tcp")
+        {
+            var separator = name.IndexOf('@');
+
+            if (separator >= 0 && separator < name.Length - 1)
+            {
+                name = name[(separator + 1)..];
+            }
+        }
+
+        return name.Trim();
+    }
+
+    private static string GetDeviceId(
+        string hostname,
+        string name)
+    {
+        return name.Trim().ToLowerInvariant();
     }
 
     public IReadOnlyCollection<AirPlayDevice> GetDevices()
     {
-        return _devices.Values.ToArray();
+        lock (_sync)
+        {
+            return _services.Values
+                .Select(s => s.DeviceId)
+                .Distinct()
+                .Select(BuildDevice)
+                .Where(d => d != null)
+                .Cast<AirPlayDevice>()
+                .ToArray();
+        }
     }
 
     public void Dispose()
@@ -83,4 +186,12 @@ public sealed class AirPlayDiscoveryService : IDisposable
         _airPlayBrowser.Dispose();
         _raopBrowser.Dispose();
     }
+
+    private sealed record ServiceEntry(
+        string ServiceKey,
+        string DeviceId,
+        string Name,
+        string Hostname,
+        int Port,
+        string ServiceType);
 }

@@ -25,6 +25,7 @@ public partial class MainWindow : Window
         DeviceComboBox.ItemsSource = _devices;
 
         _discovery.DeviceFound += OnDeviceFound;
+        _discovery.DeviceUpdated += OnDeviceUpdated;
         _discovery.DeviceLost += OnDeviceLost;
 
         _discovery.Start();
@@ -63,7 +64,7 @@ public partial class MainWindow : Window
     {
         DeviceSearchText.Text = _devices.Count == 0
             ? "Searching for AirPlay devices..."
-            : $"{_devices.Count} AirPlay services found";
+            : $"{_devices.Count} speaker(s) found";
     }
 
     private void DeviceComboBox_SelectionChanged(
@@ -109,4 +110,36 @@ public partial class MainWindow : Window
             VolumeText.Text = $"{(int)VolumeSlider.Value}%";
         }
     }
+
+    
+    private void OnDeviceUpdated(AirPlayDevice device)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var index = _devices
+                .ToList()
+                .FindIndex(d => d.Id == device.Id);
+
+            if (index >= 0)
+            {
+                var wasSelected =
+                    DeviceComboBox.SelectedItem is AirPlayDevice selected &&
+                    selected.Id == device.Id;
+
+                _devices[index] = device;
+
+                if (wasSelected)
+                {
+                    DeviceComboBox.SelectedItem = device;
+                }
+            }
+            else
+            {
+                _devices.Add(device);
+            }
+
+            UpdateDeviceSearchText();
+        });
+    }
+
 }
