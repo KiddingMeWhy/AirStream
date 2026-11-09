@@ -1,10 +1,16 @@
 {
   "version": 2,
-  "dgSpecHash": "9n4iJivO+fw=",
+  "dgSpecHash": "BMqEGlwEIVQ=",
   "success": true,
   "projectFilePath": "C:\\Programming\\Projects\\AirStream\\src\\AirStream.App\\AirStream.App.csproj",
   "expectedPackageFiles": [
-    "C:\\Users\\drume\\.nuget\\packages\\haukcode.mdns\\1.1.23\\haukcode.mdns.1.1.23.nupkg.sha512"
+    "C:\\Users\\drume\\.nuget\\packages\\haukcode.mdns\\1.1.23\\haukcode.mdns.1.1.23.nupkg.sha512",
+    "C:\\Users\\drume\\.nuget\\packages\\naudio\\3.3.0\\naudio.3.3.0.nupkg.sha512",
+    "C:\\Users\\drume\\.nuget\\packages\\naudio.core\\3.3.0\\naudio.core.3.3.0.nupkg.sha512",
+    "C:\\Users\\drume\\.nuget\\packages\\naudio.midi\\3.3.0\\naudio.midi.3.3.0.nupkg.sha512",
+    "C:\\Users\\drume\\.nuget\\packages\\naudio.wasapi\\3.3.0\\naudio.wasapi.3.3.0.nupkg.sha512",
+    "C:\\Users\\drume\\.nuget\\packages\\naudio.winmm\\3.3.0\\naudio.winmm.3.3.0.nupkg.sha512",
+    "C:\\Users\\drume\\.nuget\\packages\\system.numerics.tensors\\9.0.0\\system.numerics.tensors.9.0.0.nupkg.sha512"
   ],
   "logs": []
 }

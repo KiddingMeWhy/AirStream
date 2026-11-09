@@ -29,3 +29,9 @@ C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\Ai
 C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\AirStream.App.sourcelink.json
 C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\AirStrea.44BFBAC6.Up2Date
 C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\Mdns.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\NAudio.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\NAudio.Core.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\NAudio.Midi.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\NAudio.Wasapi.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\NAudio.WinMM.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\System.Numerics.Tensors.dll

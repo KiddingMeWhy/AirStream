@@ -6,26 +6,36 @@ using System.Windows.Media;
 using AirStream.Core.Models;
 using AirStream.Discovery;
 using AirStream.App.Services;
+using AirStream.Audio;
 using MediaColor = System.Windows.Media.Color;
 
 namespace AirStream.App;
 
 public partial class MainWindow : Window
 {
-    private bool _isConnected;
     private bool _isExiting;
     private bool _savedDeviceRestored;
 
     private readonly AirPlayDiscoveryService _discovery;
     private readonly SettingsService _settingsService;
     private readonly AppSettings _settings;
+    private readonly SystemTrayService _trayService;
+    private readonly WasapiLoopbackCaptureService _audioCapture;
 
     private readonly ObservableCollection<AirPlayDevice> _devices = new();
-    private readonly SystemTrayService _trayService;
+
+    private long _capturedBytes;
+    private int _audioDataReceived;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _audioCapture = new WasapiLoopbackCaptureService();
+
+        _audioCapture.DataAvailable += OnAudioDataAvailable;
+        _audioCapture.CaptureError += OnAudioCaptureError;
+        _audioCapture.CaptureStopped += OnAudioCaptureStopped;
 
         _settingsService = new SettingsService();
         _settings = _settingsService.Load();
@@ -45,8 +55,10 @@ public partial class MainWindow : Window
 
         StateChanged += MainWindow_StateChanged;
         Closing += MainWindow_Closing;
+
         Closed += (_, _) =>
         {
+            _audioCapture.Dispose();
             _discovery.Dispose();
             _trayService.Dispose();
         };
@@ -107,10 +119,6 @@ public partial class MainWindow : Window
             if (device != null)
                 _devices.Remove(device);
 
-            // Die gespeicherte ID bleibt erhalten,
-            // damit die Auswahl beim nächsten Start
-            // wiederhergestellt werden kann.
-
             UpdateDeviceSearchText();
         });
     }
@@ -157,23 +165,43 @@ public partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        _isConnected = !_isConnected;
-
-        if (_isConnected)
+        try
         {
-            StatusText.Text = "Connected (Demo)";
-            StatusIndicator.Fill =
-                new SolidColorBrush(MediaColor.FromRgb(34, 197, 94));
+            if (!_audioCapture.IsCapturing)
+            {
+                _capturedBytes = 0;
+                _audioDataReceived = 0;
 
-            ConnectButton.Content = "Disconnect";
+                _audioCapture.Start();
+
+                StatusText.Text = "Starting audio capture...";
+
+                StatusIndicator.Fill =
+                    new SolidColorBrush(
+                        MediaColor.FromRgb(34, 197, 94));
+
+                ConnectButton.Content = "Stop Capture";
+            }
+            else
+            {
+                _audioCapture.Stop();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            StatusText.Text = "Not connected";
-            StatusIndicator.Fill =
-                new SolidColorBrush(MediaColor.FromRgb(100, 116, 139));
+            StatusText.Text = "Audio capture failed";
 
-            ConnectButton.Content = "Connect";
+            StatusIndicator.Fill =
+                new SolidColorBrush(
+                    MediaColor.FromRgb(239, 68, 68));
+
+            ConnectButton.Content = "Start Capture";
+
+            System.Windows.MessageBox.Show(
+                ex.Message,
+                "AirStream - Audio Capture Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
         }
     }
 
@@ -185,6 +213,59 @@ public partial class MainWindow : Window
         {
             VolumeText.Text = $"{(int)VolumeSlider.Value}%";
         }
+    }
+
+    private void OnAudioDataAvailable(
+        object? sender,
+        AudioDataEventArgs e)
+    {
+        Interlocked.Add(
+            ref _capturedBytes,
+            e.BytesRecorded);
+
+        if (Interlocked.Exchange(
+            ref _audioDataReceived, 1) == 0)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                StatusText.Text =
+                    "Capturing audio - Signal detected";
+            });
+        }
+    }
+
+    private void OnAudioCaptureError(Exception exception)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            StatusText.Text = "Audio capture error";
+
+            StatusIndicator.Fill =
+                new SolidColorBrush(
+                    MediaColor.FromRgb(239, 68, 68));
+
+            ConnectButton.Content = "Start Capture";
+
+            System.Windows.MessageBox.Show(
+                exception.Message,
+                "AirStream - Audio Capture Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        });
+    }
+
+    private void OnAudioCaptureStopped()
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            StatusText.Text = "Audio capture stopped";
+
+            StatusIndicator.Fill =
+                new SolidColorBrush(
+                    MediaColor.FromRgb(100, 116, 139));
+
+            ConnectButton.Content = "Start Capture";
+        });
     }
 
     private void MainWindow_StateChanged(
