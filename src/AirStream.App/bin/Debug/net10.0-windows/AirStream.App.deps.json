@@ -7,14 +7,81 @@
   "targets": {
     ".NETCoreApp,Version=v10.0": {
       "AirStream.App/1.0.0": {
+        "dependencies": {
+          "AirStream.AirPlay": "1.0.0",
+          "AirStream.Audio": "1.0.0",
+          "AirStream.Core": "1.0.0",
+          "AirStream.Discovery": "1.0.0"
+        },
         "runtime": {
           "AirStream.App.dll": {}
+        }
+      },
+      "AirStream.AirPlay/1.0.0": {
+        "dependencies": {
+          "AirStream.Core": "1.0.0"
+        },
+        "runtime": {
+          "AirStream.AirPlay.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "AirStream.Audio/1.0.0": {
+        "dependencies": {
+          "AirStream.Core": "1.0.0"
+        },
+        "runtime": {
+          "AirStream.Audio.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "AirStream.Core/1.0.0": {
+        "runtime": {
+          "AirStream.Core.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "AirStream.Discovery/1.0.0": {
+        "dependencies": {
+          "AirStream.Core": "1.0.0"
+        },
+        "runtime": {
+          "AirStream.Discovery.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
         }
       }
     }
   },
   "libraries": {
     "AirStream.App/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AirStream.AirPlay/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AirStream.Audio/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AirStream.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AirStream.Discovery/1.0.0": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

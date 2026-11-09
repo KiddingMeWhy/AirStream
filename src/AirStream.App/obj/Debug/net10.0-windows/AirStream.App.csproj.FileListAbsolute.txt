@@ -17,3 +17,14 @@ C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\re
 C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\AirStream.App.pdb
 C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\AirStream.App.genruntimeconfig.cache
 C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\ref\AirStream.App.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\AirStream.AirPlay.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\AirStream.Audio.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\AirStream.Core.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\AirStream.Discovery.dll
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\AirStream.Core.pdb
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\AirStream.Audio.pdb
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\AirStream.AirPlay.pdb
+C:\Programming\Projects\AirStream\src\AirStream.App\bin\Debug\net10.0-windows\AirStream.Discovery.pdb
+C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\AirStream.App.csproj.AssemblyReference.cache
+C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\AirStream.App.sourcelink.json
+C:\Programming\Projects\AirStream\src\AirStream.App\obj\Debug\net10.0-windows\AirStrea.44BFBAC6.Up2Date

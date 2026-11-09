@@ -1,11 +1,87 @@
 {
   "version": 4,
   "targets": {
-    "net10.0-windows": {}
+    "net10.0-windows": {
+      "AirStream.AirPlay/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "AirStream.Core": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/AirStream.AirPlay.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/AirStream.AirPlay.dll": {}
+        }
+      },
+      "AirStream.Audio/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "AirStream.Core": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/AirStream.Audio.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/AirStream.Audio.dll": {}
+        }
+      },
+      "AirStream.Core/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "compile": {
+          "bin/placeholder/AirStream.Core.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/AirStream.Core.dll": {}
+        }
+      },
+      "AirStream.Discovery/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "dependencies": {
+          "AirStream.Core": "1.0.0"
+        },
+        "compile": {
+          "bin/placeholder/AirStream.Discovery.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/AirStream.Discovery.dll": {}
+        }
+      }
+    }
   },
-  "libraries": {},
+  "libraries": {
+    "AirStream.AirPlay/1.0.0": {
+      "type": "project",
+      "path": "../AirStream.AirPlay/AirStream.AirPlay.csproj",
+      "msbuildProject": "../AirStream.AirPlay/AirStream.AirPlay.csproj"
+    },
+    "AirStream.Audio/1.0.0": {
+      "type": "project",
+      "path": "../AirStream.Audio/AirStream.Audio.csproj",
+      "msbuildProject": "../AirStream.Audio/AirStream.Audio.csproj"
+    },
+    "AirStream.Core/1.0.0": {
+      "type": "project",
+      "path": "../AirStream.Core/AirStream.Core.csproj",
+      "msbuildProject": "../AirStream.Core/AirStream.Core.csproj"
+    },
+    "AirStream.Discovery/1.0.0": {
+      "type": "project",
+      "path": "../AirStream.Discovery/AirStream.Discovery.csproj",
+      "msbuildProject": "../AirStream.Discovery/AirStream.Discovery.csproj"
+    }
+  },
   "projectFileDependencyGroups": {
-    "net10.0-windows": []
+    "net10.0-windows": [
+      "AirStream.AirPlay >= 1.0.0",
+      "AirStream.Audio >= 1.0.0",
+      "AirStream.Core >= 1.0.0",
+      "AirStream.Discovery >= 1.0.0"
+    ]
   },
   "packageFolders": {
     "C:\\Users\\drume\\.nuget\\packages\\": {}
@@ -32,7 +108,20 @@
         "net10.0-windows": {
           "framework": "net10.0-windows7.0",
           "targetAlias": "net10.0-windows",
-          "projectReferences": {}
+          "projectReferences": {
+            "C:\\Programming\\Projects\\AirStream\\src\\AirStream.AirPlay\\AirStream.AirPlay.csproj": {
+              "projectPath": "C:\\Programming\\Projects\\AirStream\\src\\AirStream.AirPlay\\AirStream.AirPlay.csproj"
+            },
+            "C:\\Programming\\Projects\\AirStream\\src\\AirStream.Audio\\AirStream.Audio.csproj": {
+              "projectPath": "C:\\Programming\\Projects\\AirStream\\src\\AirStream.Audio\\AirStream.Audio.csproj"
+            },
+            "C:\\Programming\\Projects\\AirStream\\src\\AirStream.Core\\AirStream.Core.csproj": {
+              "projectPath": "C:\\Programming\\Projects\\AirStream\\src\\AirStream.Core\\AirStream.Core.csproj"
+            },
+            "C:\\Programming\\Projects\\AirStream\\src\\AirStream.Discovery\\AirStream.Discovery.csproj": {
+              "projectPath": "C:\\Programming\\Projects\\AirStream\\src\\AirStream.Discovery\\AirStream.Discovery.csproj"
+            }
+          }
         }
       },
       "warningProperties": {

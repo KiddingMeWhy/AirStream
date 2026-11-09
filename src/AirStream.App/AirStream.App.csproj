@@ -1,5 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <ProjectReference Include="..\AirStream.Core\AirStream.Core.csproj" />
+    <ProjectReference Include="..\AirStream.Audio\AirStream.Audio.csproj" />
+    <ProjectReference Include="..\AirStream.AirPlay\AirStream.AirPlay.csproj" />
+    <ProjectReference Include="..\AirStream.Discovery\AirStream.Discovery.csproj" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>

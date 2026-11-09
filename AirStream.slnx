@@ -1,5 +1,9 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/AirStream.AirPlay/AirStream.AirPlay.csproj" />
     <Project Path="src/AirStream.App/AirStream.App.csproj" />
+    <Project Path="src/AirStream.Audio/AirStream.Audio.csproj" />
+    <Project Path="src/AirStream.Core/AirStream.Core.csproj" />
+    <Project Path="src/AirStream.Discovery/AirStream.Discovery.csproj" />
   </Folder>
 </Solution>
