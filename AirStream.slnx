@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AirStream.App/AirStream.App.csproj" />
+  </Folder>
+</Solution>
