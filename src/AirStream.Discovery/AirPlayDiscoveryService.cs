@@ -144,9 +144,6 @@ public sealed class AirPlayDiscoveryService : IDisposable
     {
         var name = instanceName;
 
-        // RAOP names often start with a hardware identifier:
-        // 1EA0FEDF6486@Bedroom
-
         if (serviceType == "_raop._tcp")
         {
             var separator = name.IndexOf('@');

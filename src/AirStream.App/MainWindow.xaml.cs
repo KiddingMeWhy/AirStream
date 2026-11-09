@@ -5,16 +5,21 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using AirStream.Core.Models;
 using AirStream.Discovery;
+using AirStream.App.Services;
+using MediaColor = System.Windows.Media.Color;
 
 namespace AirStream.App;
 
 public partial class MainWindow : Window
 {
     private bool _isConnected;
+    private bool _isExiting;
 
     private readonly AirPlayDiscoveryService _discovery;
 
     private readonly ObservableCollection<AirPlayDevice> _devices = new();
+
+    private readonly SystemTrayService _trayService;
 
     public MainWindow()
     {
@@ -31,6 +36,14 @@ public partial class MainWindow : Window
         _discovery.Start();
 
         Closed += (_, _) => _discovery.Dispose();
+
+        _trayService = new SystemTrayService();
+
+        _trayService.OpenRequested += RestoreWindow;
+        _trayService.ExitRequested += ExitApplication;
+
+        StateChanged += MainWindow_StateChanged;
+        Closing += MainWindow_Closing;
     }
 
     private void OnDeviceFound(AirPlayDevice device)
@@ -87,7 +100,7 @@ public partial class MainWindow : Window
         {
             StatusText.Text = "Connected (Demo)";
             StatusIndicator.Fill =
-                new SolidColorBrush(Color.FromRgb(34, 197, 94));
+                new SolidColorBrush(MediaColor.FromRgb(34, 197, 94));
 
             ConnectButton.Content = "Disconnect";
         }
@@ -95,7 +108,7 @@ public partial class MainWindow : Window
         {
             StatusText.Text = "Not connected";
             StatusIndicator.Fill =
-                new SolidColorBrush(Color.FromRgb(100, 116, 139));
+                new SolidColorBrush(MediaColor.FromRgb(100, 116, 139));
 
             ConnectButton.Content = "Connect";
         }
@@ -141,5 +154,52 @@ public partial class MainWindow : Window
             UpdateDeviceSearchText();
         });
     }
+
+    
+    private void MainWindow_StateChanged(
+        object? sender,
+        EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            Hide();
+        }
+    }
+
+    private void MainWindow_Closing(
+        object? sender,
+        System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_isExiting)
+        {
+            e.Cancel = true;
+            Hide();
+        }
+    }
+
+    private void RestoreWindow()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            Show();
+
+            WindowState = WindowState.Normal;
+
+            Activate();
+        });
+    }
+
+    private void ExitApplication()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            _isExiting = true;
+
+            _trayService.Dispose();
+
+            Close();
+        });
+    }
+
 
 }
