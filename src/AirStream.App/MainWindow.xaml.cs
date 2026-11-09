@@ -14,16 +14,21 @@ public partial class MainWindow : Window
 {
     private bool _isConnected;
     private bool _isExiting;
+    private bool _savedDeviceRestored;
 
     private readonly AirPlayDiscoveryService _discovery;
+    private readonly SettingsService _settingsService;
+    private readonly AppSettings _settings;
 
     private readonly ObservableCollection<AirPlayDevice> _devices = new();
-
     private readonly SystemTrayService _trayService;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _settingsService = new SettingsService();
+        _settings = _settingsService.Load();
 
         _discovery = new AirPlayDiscoveryService();
 
@@ -33,10 +38,6 @@ public partial class MainWindow : Window
         _discovery.DeviceUpdated += OnDeviceUpdated;
         _discovery.DeviceLost += OnDeviceLost;
 
-        _discovery.Start();
-
-        Closed += (_, _) => _discovery.Dispose();
-
         _trayService = new SystemTrayService();
 
         _trayService.OpenRequested += RestoreWindow;
@@ -44,6 +45,13 @@ public partial class MainWindow : Window
 
         StateChanged += MainWindow_StateChanged;
         Closing += MainWindow_Closing;
+        Closed += (_, _) =>
+        {
+            _discovery.Dispose();
+            _trayService.Dispose();
+        };
+
+        _discovery.Start();
     }
 
     private void OnDeviceFound(AirPlayDevice device)
@@ -55,6 +63,36 @@ public partial class MainWindow : Window
 
             _devices.Add(device);
 
+            TryRestoreSavedDeviceSelection();
+            UpdateDeviceSearchText();
+        });
+    }
+
+    private void OnDeviceUpdated(AirPlayDevice device)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var index = _devices
+                .ToList()
+                .FindIndex(d => d.Id == device.Id);
+
+            if (index >= 0)
+            {
+                var wasSelected =
+                    DeviceComboBox.SelectedItem is AirPlayDevice selected &&
+                    selected.Id == device.Id;
+
+                _devices[index] = device;
+
+                if (wasSelected)
+                    DeviceComboBox.SelectedItem = device;
+            }
+            else
+            {
+                _devices.Add(device);
+            }
+
+            TryRestoreSavedDeviceSelection();
             UpdateDeviceSearchText();
         });
     }
@@ -69,8 +107,30 @@ public partial class MainWindow : Window
             if (device != null)
                 _devices.Remove(device);
 
+            // Die gespeicherte ID bleibt erhalten,
+            // damit die Auswahl beim nächsten Start
+            // wiederhergestellt werden kann.
+
             UpdateDeviceSearchText();
         });
+    }
+
+    private void TryRestoreSavedDeviceSelection()
+    {
+        if (_savedDeviceRestored ||
+            string.IsNullOrWhiteSpace(_settings.LastSelectedDeviceId))
+        {
+            return;
+        }
+
+        var savedDevice = _devices.FirstOrDefault(
+            d => d.Id == _settings.LastSelectedDeviceId);
+
+        if (savedDevice == null)
+            return;
+
+        DeviceComboBox.SelectedItem = savedDevice;
+        _savedDeviceRestored = true;
     }
 
     private void UpdateDeviceSearchText()
@@ -87,6 +147,9 @@ public partial class MainWindow : Window
         if (DeviceComboBox.SelectedItem is AirPlayDevice device)
         {
             DeviceSearchText.Text = $"Selected: {device.Name}";
+
+            _settings.LastSelectedDeviceId = device.Id;
+            _settingsService.Save(_settings);
         }
     }
 
@@ -124,46 +187,12 @@ public partial class MainWindow : Window
         }
     }
 
-    
-    private void OnDeviceUpdated(AirPlayDevice device)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            var index = _devices
-                .ToList()
-                .FindIndex(d => d.Id == device.Id);
-
-            if (index >= 0)
-            {
-                var wasSelected =
-                    DeviceComboBox.SelectedItem is AirPlayDevice selected &&
-                    selected.Id == device.Id;
-
-                _devices[index] = device;
-
-                if (wasSelected)
-                {
-                    DeviceComboBox.SelectedItem = device;
-                }
-            }
-            else
-            {
-                _devices.Add(device);
-            }
-
-            UpdateDeviceSearchText();
-        });
-    }
-
-    
     private void MainWindow_StateChanged(
         object? sender,
         EventArgs e)
     {
         if (WindowState == WindowState.Minimized)
-        {
             Hide();
-        }
     }
 
     private void MainWindow_Closing(
@@ -182,9 +211,7 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             Show();
-
             WindowState = WindowState.Normal;
-
             Activate();
         });
     }
@@ -194,12 +221,8 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             _isExiting = true;
-
             _trayService.Dispose();
-
             Close();
         });
     }
-
-
 }
