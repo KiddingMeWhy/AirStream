@@ -9,7 +9,7 @@ pub type SharedOutput = Arc<Mutex<BufWriter<io::Stdout>>>;
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
     Ping { request_id: Option<String> },
-    StartCapture,
+    StartCapture { pipe_name: String },
     StopCapture,
     Shutdown,
 }

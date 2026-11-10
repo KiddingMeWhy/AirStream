@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Buffers.Binary;
+using System.IO.Pipes;
 
 namespace AirStream.App.Services;
 
@@ -15,6 +17,11 @@ public sealed class EngineProcessClient : IAsyncDisposable
     private Process? _process;
     private Task? _stdoutTask;
     private Task? _stderrTask;
+
+    private NamedPipeServerStream? _audioPipe;
+    private Task? _audioPipeTask;
+
+    public event Action<byte[]>? AudioDataReceived;
 
     public event Action<JsonElement>? MessageReceived;
     public event Action<string>? DiagnosticReceived;
@@ -69,12 +76,131 @@ public sealed class EngineProcessClient : IAsyncDisposable
 
     public async Task StartCaptureAsync(CancellationToken cancellationToken = default)
     {
-        await SendAsync(new { type = "start_capture" }, cancellationToken);
+        if (_audioPipe is not null)
+            throw new InvalidOperationException("The audio pipe is already active.");
+
+        var pipeName = $"AirStreamAudio_{Guid.NewGuid():N}";
+
+        var pipe = new NamedPipeServerStream(
+            pipeName,
+            PipeDirection.In,
+            1,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous,
+            65536,
+            65536);
+
+        _audioPipe = pipe;
+        var connectionTask = pipe.WaitForConnectionAsync(cancellationToken);
+
+        try
+        {
+            await SendAsync(
+                new { type = "start_capture", pipe_name = pipeName },
+                cancellationToken);
+
+            await connectionTask.WaitAsync(
+                TimeSpan.FromSeconds(15),
+                cancellationToken);
+
+            _audioPipeTask = ReadAudioPipeAsync(pipe, cancellationToken);
+        }
+        catch
+        {
+            await pipe.DisposeAsync();
+
+            try
+            {
+                await connectionTask;
+            }
+            catch
+            {
+            }
+
+            _audioPipe = null;
+            throw;
+        }
     }
 
     public async Task StopCaptureAsync(CancellationToken cancellationToken = default)
     {
-        await SendAsync(new { type = "stop_capture" }, cancellationToken);
+        try
+        {
+            await SendAsync(
+                new { type = "stop_capture" },
+                cancellationToken);
+
+            if (_audioPipeTask is not null)
+                await _audioPipeTask;
+        }
+        finally
+        {
+            if (_audioPipe is not null)
+                await _audioPipe.DisposeAsync();
+
+            _audioPipe = null;
+            _audioPipeTask = null;
+        }
+    }
+
+        private async Task ReadAudioPipeAsync(
+        NamedPipeServerStream pipe,
+        CancellationToken cancellationToken)
+    {
+        var lengthBuffer = new byte[sizeof(int)];
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var headerBytes = await ReadExactlyAsync(
+                pipe,
+                lengthBuffer,
+                cancellationToken);
+
+            if (headerBytes == 0)
+                break;
+
+            if (headerBytes != lengthBuffer.Length)
+                throw new InvalidDataException("Incomplete audio frame header.");
+
+            var frameLength = BinaryPrimitives.ReadInt32LittleEndian(lengthBuffer);
+
+            if (frameLength <= 0 || frameLength > 1024 * 1024)
+                throw new InvalidDataException($"Invalid audio frame length: {frameLength}.");
+
+            var audioData = new byte[frameLength];
+
+            var dataBytes = await ReadExactlyAsync(
+                pipe,
+                audioData,
+                cancellationToken);
+
+            if (dataBytes != frameLength)
+                throw new InvalidDataException("Incomplete audio frame payload.");
+
+            AudioDataReceived?.Invoke(audioData);
+        }
+    }
+
+    private static async Task<int> ReadExactlyAsync(
+        Stream stream,
+        byte[] buffer,
+        CancellationToken cancellationToken)
+    {
+        var totalRead = 0;
+
+        while (totalRead < buffer.Length)
+        {
+            var bytesRead = await stream.ReadAsync(
+                buffer.AsMemory(totalRead),
+                cancellationToken);
+
+            if (bytesRead == 0)
+                break;
+
+            totalRead += bytesRead;
+        }
+
+        return totalRead;
     }
 
     private async Task SendAsync<T>(T message, CancellationToken cancellationToken)
@@ -160,6 +286,19 @@ public sealed class EngineProcessClient : IAsyncDisposable
         if (process is null)
             return;
 
+        if (_audioPipe is not null && !process.HasExited)
+        {
+            try
+            {
+                await StopCaptureAsync(cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                DiagnosticReceived?.Invoke(
+                    $"Audio pipe shutdown error: {exception.Message}");
+            }
+        }
+
         if (!process.HasExited)
         {
             try
@@ -178,6 +317,28 @@ public sealed class EngineProcessClient : IAsyncDisposable
             }
         }
 
+        if (_audioPipe is not null)
+        {
+            await _audioPipe.DisposeAsync();
+        }
+
+        _audioPipe = null;
+
+        if (_audioPipeTask is not null)
+        {
+            try
+            {
+                await _audioPipeTask;
+            }
+            catch (Exception exception)
+            {
+                DiagnosticReceived?.Invoke(
+                    $"Audio pipe reader stopped: {exception.Message}");
+            }
+        }
+
+        _audioPipeTask = null;
+        
         if (_stdoutTask is not null)
             await _stdoutTask;
         if (_stderrTask is not null)

@@ -54,8 +54,8 @@ fn main() -> io::Result<()> {
                     }),
                 )?;
             }
-            Command::StartCapture => {
-                match capture.start(Arc::clone(&output)) {
+            Command::StartCapture { pipe_name } => {
+                match capture.start(Arc::clone(&output), pipe_name) {
                     Ok(()) => ipc::write_message(
                         &output,
                         json!({ "type": "capture_starting" }),

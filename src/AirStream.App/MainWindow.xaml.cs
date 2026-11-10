@@ -1,4 +1,4 @@
-
+﻿
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows;
@@ -39,6 +39,7 @@ public partial class MainWindow : Window
             Path.Combine(AppContext.BaseDirectory, "AirStream.Engine.exe"));
 
         _engine.MessageReceived += OnEngineMessageReceived;
+        _engine.AudioDataReceived += OnEngineAudioDataReceived;
         _engine.DiagnosticReceived += diagnostic =>
             Debug.WriteLine($"[AirStream.Engine] {diagnostic}");
 
@@ -206,7 +207,11 @@ public partial class MainWindow : Window
             if (!_engine.IsRunning)
                 await _engine.StartAsync();
 
+            Interlocked.Exchange(ref _capturedBytes, 0);
+            Interlocked.Exchange(ref _audioDataReceived, 0);
+
             await _engine.StartCaptureAsync();
+
             _engineCaptureActive = true;
 
             StatusText.Text = "Starting Rust audio capture...";
@@ -235,6 +240,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnEngineAudioDataReceived(byte[] audioData)
+    {
+        Interlocked.Add(ref _capturedBytes, audioData.Length);
+
+        if (Interlocked.Exchange(ref _audioDataReceived, 1) == 0)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                StatusText.Text = "PCM audio received through named pipe";
+            });
+        }
+    }
+
     private void OnEngineMessageReceived(System.Text.Json.JsonElement message)
     {
         if (!message.TryGetProperty("type", out var typeElement))
@@ -259,8 +277,15 @@ public partial class MainWindow : Window
                 }
 
                 case "capture_stats":
-                    StatusText.Text = "Capturing audio in Rust - Signal detected";
+                {
+                    var receivedBytes = Interlocked.Read(ref _capturedBytes);
+
+                    StatusText.Text = receivedBytes > 0
+                        ? $"PCM received: {receivedBytes:N0} bytes"
+                        : "WASAPI active - waiting for PCM audio";
+
                     break;
+                }
 
                 case "capture_stopped":
                     _engineCaptureActive = false;

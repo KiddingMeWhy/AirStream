@@ -32,7 +32,7 @@ impl CaptureController {
         self.worker.is_some()
     }
 
-    pub fn start(&mut self, output: SharedOutput) -> Result<(), String> {
+        pub fn start(&mut self, output: SharedOutput, pipe_name: String) -> Result<(), String> {
         if self.is_running() {
             return Err("Audio capture is already running.".to_string());
         }
@@ -43,7 +43,7 @@ impl CaptureController {
         let worker = thread::Builder::new()
             .name("AirStream-WASAPI-Capture".to_string())
             .spawn(move || {
-                if let Err(error) = capture_loop(worker_stop_flag, output.clone()) {
+                if let Err(error) = capture_loop(worker_stop_flag, output.clone(), pipe_name) {
                     let _ = crate::ipc::write_message(
                         &output,
                         json!({
@@ -84,10 +84,12 @@ impl Drop for CaptureController {
 }
 
 #[cfg(windows)]
-fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput) -> Result<(), String> {
+fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput, pipe_name: String) -> Result<(), String> {
     use wasapi::{
         initialize_mta, DeviceEnumerator, Direction, StreamMode,
     };
+
+    use std::io::Write;
 
     initialize_mta()
         .ok()
@@ -136,6 +138,21 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput) -> Result<(), 
         .get_audiocaptureclient()
         .map_err(|error| format!("Could not get the WASAPI capture client: {error}"))?;
 
+        if pipe_name.is_empty()
+        || !pipe_name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_' || character == '-')
+        {
+            return Err("Invalid audio pipe name.".to_string());
+        }
+
+    let pipe_path = format!(r"\\.\pipe\{pipe_name}");
+
+    let mut audio_pipe = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&pipe_path)
+        .map_err(|error| format!("Could not connect to the audio pipe: {error}"))?;
+
     audio_client
         .start_stream()
         .map_err(|error| format!("Could not start WASAPI loopback: {error}"))?;
@@ -170,12 +187,25 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput) -> Result<(), 
             Some(frame_count) if frame_count > 0 => {
                 let byte_count = frame_count as usize * bytes_per_frame;
                 let mut buffer = vec![0_u8; byte_count];
+
                 let (frames_read, _) = capture_client
                     .read_from_device(&mut buffer)
                     .map_err(|error| format!("WASAPI audio read failed: {error}"))?;
-                total_bytes = total_bytes.saturating_add(
-                    frames_read as u64 * bytes_per_frame as u64,
-                );
+
+                let data_length = frames_read as usize * bytes_per_frame;
+                buffer.truncate(data_length);
+
+                if !buffer.is_empty() {
+                    let frame_length = u32::try_from(buffer.len())
+                        .map_err(|error| format!("Invalid audio frame length: {error}"))?;
+
+                    audio_pipe
+                        .write_all(&frame_length.to_le_bytes())
+                        .and_then(|_| audio_pipe.write_all(&buffer))
+                        .map_err(|error| format!("Could not forward captured audio: {error}"))?;
+                }
+
+                total_bytes = total_bytes.saturating_add(data_length as u64);
             }
             _ => thread::sleep(Duration::from_millis(2)),
         }
@@ -201,6 +231,6 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput) -> Result<(), 
 }
 
 #[cfg(not(windows))]
-fn capture_loop(_stop_flag: Arc<AtomicBool>, _output: SharedOutput) -> Result<(), String> {
+fn capture_loop(_stop_flag: Arc<AtomicBool>, _output: SharedOutput, _pipe_name: String) -> Result<(), String> {
     Err("WASAPI loopback capture is only available on Windows.".to_string())
 }
