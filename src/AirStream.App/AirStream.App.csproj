@@ -16,4 +16,21 @@
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
+  <!-- Build the standalone Rust engine whenever the WPF app is built. -->
+  <Target Name="BuildAirStreamRustEngine" BeforeTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="&quot;$(USERPROFILE)\.cargo\bin\cargo.exe&quot; build --release --manifest-path &quot;$(MSBuildProjectDirectory)\..\AirStream.Engine\Cargo.toml&quot;" />
+  </Target>
+
+  <!-- Place the engine beside the WPF executable for ProcessStartInfo. -->
+  <Target Name="CopyAirStreamRustEngineToBuildOutput" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\AirStream.Engine\target\release\airstream-engine.exe"
+          DestinationFiles="$(OutDir)AirStream.Engine.exe" />
+  </Target>
+
+  <!-- Also include the engine in dotnet publish output. -->
+  <Target Name="CopyAirStreamRustEngineToPublishOutput" AfterTargets="Publish" Condition="'$(PublishDir)' != ''">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\AirStream.Engine\target\release\airstream-engine.exe"
+          DestinationFiles="$(PublishDir)AirStream.Engine.exe" />
+  </Target>
+
 </Project>

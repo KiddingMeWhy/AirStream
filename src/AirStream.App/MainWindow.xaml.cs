@@ -1,5 +1,6 @@
-﻿
+
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -8,6 +9,7 @@ using AirStream.Discovery;
 using AirStream.App.Services;
 using AirStream.Audio;
 using MediaColor = System.Windows.Media.Color;
+using System.IO;
 
 namespace AirStream.App;
 
@@ -21,15 +23,26 @@ public partial class MainWindow : Window
     private readonly AppSettings _settings;
     private readonly SystemTrayService _trayService;
     private readonly WasapiLoopbackCaptureService _audioCapture;
+    private readonly EngineProcessClient _engine;
 
     private readonly ObservableCollection<AirPlayDevice> _devices = new();
 
     private long _capturedBytes;
     private int _audioDataReceived;
+    private bool _engineCaptureActive;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _engine = new EngineProcessClient(
+            Path.Combine(AppContext.BaseDirectory, "AirStream.Engine.exe"));
+
+        _engine.MessageReceived += OnEngineMessageReceived;
+        _engine.DiagnosticReceived += diagnostic =>
+            Debug.WriteLine($"[AirStream.Engine] {diagnostic}");
+
+        _ = StartEngineAsync();
 
         _audioCapture = new WasapiLoopbackCaptureService();
 
@@ -56,14 +69,30 @@ public partial class MainWindow : Window
         StateChanged += MainWindow_StateChanged;
         Closing += MainWindow_Closing;
 
-        Closed += (_, _) =>
+        Closed += async (_, _) =>
         {
+            await _engine.DisposeAsync();
             _audioCapture.Dispose();
             _discovery.Dispose();
             _trayService.Dispose();
         };
 
         _discovery.Start();
+    }
+
+    private async Task StartEngineAsync()
+    {
+        try
+        {
+            await _engine.StartAsync();
+            await _engine.SendPingAsync(Guid.NewGuid().ToString("N"));
+        }
+        catch (Exception ex)
+        {
+            // The existing UI and audio-capture workflow remain usable if the native
+            // engine is unavailable during this initial integration stage.
+            Debug.WriteLine($"Could not start AirStream.Engine: {ex.Message}");
+        }
     }
 
     private void OnDeviceFound(AirPlayDevice device)
@@ -161,35 +190,36 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ConnectButton_Click(
+    private async void ConnectButton_Click(
         object sender,
         RoutedEventArgs e)
     {
         try
         {
-            if (!_audioCapture.IsCapturing)
+            if (_engineCaptureActive)
             {
-                _capturedBytes = 0;
-                _audioDataReceived = 0;
-
-                _audioCapture.Start();
-
-                StatusText.Text = "Starting audio capture...";
-
-                StatusIndicator.Fill =
-                    new SolidColorBrush(
-                        MediaColor.FromRgb(34, 197, 94));
-
-                ConnectButton.Content = "Stop Capture";
+                await _engine.StopCaptureAsync();
+                _engineCaptureActive = false;
+                return;
             }
-            else
-            {
-                _audioCapture.Stop();
-            }
+
+            if (!_engine.IsRunning)
+                await _engine.StartAsync();
+
+            await _engine.StartCaptureAsync();
+            _engineCaptureActive = true;
+
+            StatusText.Text = "Starting Rust audio capture...";
+
+            StatusIndicator.Fill =
+                new SolidColorBrush(
+                    MediaColor.FromRgb(34, 197, 94));
+
+            ConnectButton.Content = "Stop Capture";
         }
         catch (Exception ex)
         {
-            StatusText.Text = "Audio capture failed";
+            StatusText.Text = "Rust audio capture unavailable";
 
             StatusIndicator.Fill =
                 new SolidColorBrush(
@@ -199,10 +229,64 @@ public partial class MainWindow : Window
 
             System.Windows.MessageBox.Show(
                 ex.Message,
-                "AirStream - Audio Capture Error",
+                "AirStream - Engine Error",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Error);
         }
+    }
+
+    private void OnEngineMessageReceived(System.Text.Json.JsonElement message)
+    {
+        if (!message.TryGetProperty("type", out var typeElement))
+            return;
+
+        var type = typeElement.GetString();
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            switch (type)
+            {
+                case "capture_started":
+                {
+                    var deviceName = message.TryGetProperty("device", out var deviceElement)
+                        ? deviceElement.GetString()
+                        : "Default audio device";
+                    var sampleRate = message.TryGetProperty("sample_rate", out var rateElement)
+                        ? rateElement.GetInt32()
+                        : 0;
+                    StatusText.Text = $"Rust capture active - {deviceName} ({sampleRate} Hz)";
+                    break;
+                }
+
+                case "capture_stats":
+                    StatusText.Text = "Capturing audio in Rust - Signal detected";
+                    break;
+
+                case "capture_stopped":
+                    _engineCaptureActive = false;
+                    StatusText.Text = "Audio capture stopped";
+                    StatusIndicator.Fill =
+                        new SolidColorBrush(
+                            MediaColor.FromRgb(100, 116, 139));
+                    ConnectButton.Content = "Start Capture";
+                    break;
+
+                case "error":
+                {
+                    _engineCaptureActive = false;
+                    var errorMessage = message.TryGetProperty("message", out var errorElement)
+                        ? errorElement.GetString()
+                        : "Unknown engine error";
+                    StatusText.Text = "Audio engine error";
+                    StatusIndicator.Fill =
+                        new SolidColorBrush(
+                            MediaColor.FromRgb(239, 68, 68));
+                    ConnectButton.Content = "Start Capture";
+                    Debug.WriteLine($"[AirStream.Engine] {errorMessage}");
+                    break;
+                }
+            }
+        });
     }
 
     private void VolumeSlider_ValueChanged(
