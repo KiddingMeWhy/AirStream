@@ -279,10 +279,16 @@ public partial class MainWindow : Window
                 case "capture_stats":
                 {
                     var receivedBytes = Interlocked.Read(ref _capturedBytes);
+                    var sampleRate = message.GetProperty("sample_rate").GetUInt32();
+                    var channels = message.GetProperty("channels").GetUInt16();
+                    var sampleType = message.GetProperty("sample_type").GetString();
+                    var bitsPerSample = message.GetProperty("bits_per_sample").GetUInt16();
+                    var validBits = message.GetProperty("valid_bits_per_sample").GetUInt16();
 
-                    StatusText.Text = receivedBytes > 0
-                        ? $"PCM received: {receivedBytes:N0} bytes"
-                        : "WASAPI active - waiting for PCM audio";
+                    StatusText.Text =
+                        $"{sampleRate / 1000.0:F1} kHz | {channels} ch | " +
+                        $"{sampleType} {bitsPerSample}/{validBits} bit | " +
+                        $"{receivedBytes:N0} bytes";
 
                     break;
                 }

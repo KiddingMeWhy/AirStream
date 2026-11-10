@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AirStream.App")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d9aab17582f9263cc98a158bd66140ee6dd824b4")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6e42a462754f8f67b3d5a904dbcdced085600995")]
 [assembly: System.Reflection.AssemblyProductAttribute("AirStream.App")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AirStream.App")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

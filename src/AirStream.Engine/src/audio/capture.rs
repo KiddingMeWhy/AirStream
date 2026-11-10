@@ -86,7 +86,7 @@ impl Drop for CaptureController {
 #[cfg(windows)]
 fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput, pipe_name: String) -> Result<(), String> {
     use wasapi::{
-        initialize_mta, DeviceEnumerator, Direction, StreamMode,
+        initialize_mta, DeviceEnumerator, Direction, SampleType, StreamMode,
     };
 
     use std::io::Write;
@@ -161,6 +161,22 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput, pipe_name: Str
     let channels = format.get_nchannels();
     let bits_per_sample = format.get_bitspersample();
     let bytes_per_frame = format.get_blockalign() as usize;
+    let valid_bits_per_sample = format.get_validbitspersample();
+    let average_bytes_per_second = format.get_avgbytespersec();
+    let channel_mask = format.get_dwchannelmask();
+
+    let sample_type = format
+        .get_subformat()
+        .map_err(|error| format!("Could not determine audio sample type: {error}"))?;
+
+    let sample_type_name = match sample_type {
+        SampleType::Float => "float",
+        SampleType::Int => "integer",
+    };
+
+    if sample_rate == 0 || channels == 0 || bytes_per_frame == 0 {
+        return Err("Windows returned an invalid audio format.".to_string());
+    }
 
     crate::ipc::write_message(
         &output,
@@ -170,7 +186,12 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput, pipe_name: Str
             "device": device_name,
             "sample_rate": sample_rate,
             "channels": channels,
-            "bits_per_sample": bits_per_sample
+            "sample_type": sample_type_name,
+            "bits_per_sample": bits_per_sample,
+            "valid_bits_per_sample": valid_bits_per_sample,
+            "bytes_per_frame": bytes_per_frame,
+            "average_bytes_per_second": average_bytes_per_second,
+            "channel_mask": channel_mask
         }),
     )
     .map_err(|error| format!("Could not report capture start: {error}"))?;
@@ -218,7 +239,12 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput, pipe_name: Str
                     "total_bytes": total_bytes,
                     "sample_rate": sample_rate,
                     "channels": channels,
-                    "bits_per_sample": bits_per_sample
+                    "sample_type": sample_type_name,
+                    "bits_per_sample": bits_per_sample,
+                    "valid_bits_per_sample": valid_bits_per_sample,
+                    "bytes_per_frame": bytes_per_frame,
+                    "average_bytes_per_second": average_bytes_per_second,
+                    "channel_mask": channel_mask
                 }),
             )
             .map_err(|error| format!("Could not report capture statistics: {error}"))?;
