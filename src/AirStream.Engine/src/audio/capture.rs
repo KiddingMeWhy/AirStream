@@ -89,7 +89,7 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput, pipe_name: Str
         initialize_mta, DeviceEnumerator, Direction, SampleType, StreamMode,
     };
 
-    use std::io::Write;
+    use crossbeam_channel::{bounded, TrySendError};
 
     initialize_mta()
         .ok()
@@ -138,25 +138,6 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput, pipe_name: Str
         .get_audiocaptureclient()
         .map_err(|error| format!("Could not get the WASAPI capture client: {error}"))?;
 
-        if pipe_name.is_empty()
-        || !pipe_name
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '_' || character == '-')
-        {
-            return Err("Invalid audio pipe name.".to_string());
-        }
-
-    let pipe_path = format!(r"\\.\pipe\{pipe_name}");
-
-    let mut audio_pipe = std::fs::OpenOptions::new()
-        .write(true)
-        .open(&pipe_path)
-        .map_err(|error| format!("Could not connect to the audio pipe: {error}"))?;
-
-    audio_client
-        .start_stream()
-        .map_err(|error| format!("Could not start WASAPI loopback: {error}"))?;
-
     let sample_rate = format.get_samplespersec();
     let channels = format.get_nchannels();
     let bits_per_sample = format.get_bitspersample();
@@ -178,81 +159,171 @@ fn capture_loop(stop_flag: Arc<AtomicBool>, output: SharedOutput, pipe_name: Str
         return Err("Windows returned an invalid audio format.".to_string());
     }
 
-    crate::ipc::write_message(
-        &output,
-        json!({
-            "type": "capture_started",
-            "backend": "WASAPI",
-            "device": device_name,
-            "sample_rate": sample_rate,
-            "channels": channels,
-            "sample_type": sample_type_name,
-            "bits_per_sample": bits_per_sample,
-            "valid_bits_per_sample": valid_bits_per_sample,
-            "bytes_per_frame": bytes_per_frame,
-            "average_bytes_per_second": average_bytes_per_second,
-            "channel_mask": channel_mask
-        }),
-    )
-    .map_err(|error| format!("Could not report capture start: {error}"))?;
-
-    let mut total_bytes: u64 = 0;
-    let mut last_report = Instant::now();
-
-    while !stop_flag.load(Ordering::Relaxed) {
-        let next_packet = capture_client
-            .get_next_packet_size()
-            .map_err(|error| format!("WASAPI packet query failed: {error}"))?;
-
-        match next_packet {
-            Some(frame_count) if frame_count > 0 => {
-                let byte_count = frame_count as usize * bytes_per_frame;
-                let mut buffer = vec![0_u8; byte_count];
-
-                let (frames_read, _) = capture_client
-                    .read_from_device(&mut buffer)
-                    .map_err(|error| format!("WASAPI audio read failed: {error}"))?;
-
-                let data_length = frames_read as usize * bytes_per_frame;
-                buffer.truncate(data_length);
-
-                if !buffer.is_empty() {
-                    let frame_length = u32::try_from(buffer.len())
-                        .map_err(|error| format!("Invalid audio frame length: {error}"))?;
-
-                    audio_pipe
-                        .write_all(&frame_length.to_le_bytes())
-                        .and_then(|_| audio_pipe.write_all(&buffer))
-                        .map_err(|error| format!("Could not forward captured audio: {error}"))?;
-                }
-
-                total_bytes = total_bytes.saturating_add(data_length as u64);
-            }
-            _ => thread::sleep(Duration::from_millis(2)),
+        if pipe_name.is_empty()
+        || !pipe_name
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_' || character == '-')
+        {
+            return Err("Invalid audio pipe name.".to_string());
         }
 
-        if last_report.elapsed() >= Duration::from_secs(1) {
-            crate::ipc::write_message(
-                &output,
-                json!({
-                    "type": "capture_stats",
-                    "total_bytes": total_bytes,
-                    "sample_rate": sample_rate,
-                    "channels": channels,
-                    "sample_type": sample_type_name,
-                    "bits_per_sample": bits_per_sample,
-                    "valid_bits_per_sample": valid_bits_per_sample,
-                    "bytes_per_frame": bytes_per_frame,
-                    "average_bytes_per_second": average_bytes_per_second,
-                    "channel_mask": channel_mask
-                }),
-            )
-            .map_err(|error| format!("Could not report capture statistics: {error}"))?;
-            last_report = Instant::now();
-        }
+    let pipe_path = format!(r"\\.\pipe\{pipe_name}");
+
+    let audio_pipe = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&pipe_path)
+        .map_err(|error| format!("Could not connect to the audio pipe: {error}"))?;
+
+    const AUDIO_QUEUE_CAPACITY: usize = 8;
+
+    let (audio_sender, audio_receiver) = bounded::<Vec<u8>>(AUDIO_QUEUE_CAPACITY);
+    let drop_receiver = audio_receiver.clone();
+
+    let writer_worker = thread::Builder::new()
+        .name("AirStream-Audio-Pipe-Writer".to_string())
+        .spawn(move || write_audio_pipe_packets(audio_pipe, audio_receiver))
+        .map_err(|error| format!("Could not start audio pipe writer thread: {error}"))?;
+
+    if let Err(error) = audio_client.start_stream() {
+        drop(audio_sender);
+        let _ = writer_worker.join();
+
+        return Err(format!("Could not start WASAPI loopback: {error}"));
     }
 
+    let capture_result = (|| -> Result<(), String> {
+        crate::ipc::write_message(
+            &output,
+            json!({
+                "type": "capture_started",
+                "backend": "WASAPI",
+                "device": device_name,
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "sample_type": sample_type_name,
+                "bits_per_sample": bits_per_sample,
+                "valid_bits_per_sample": valid_bits_per_sample,
+                "bytes_per_frame": bytes_per_frame,
+                "average_bytes_per_second": average_bytes_per_second,
+                "channel_mask": channel_mask,
+                "queue_capacity": AUDIO_QUEUE_CAPACITY
+            }),
+        )
+        .map_err(|error| format!("Could not report capture start: {error}"))?;
+
+        let mut total_bytes: u64 = 0;
+        let mut dropped_packets: u64 = 0;
+        let mut last_report = Instant::now();
+
+        while !stop_flag.load(Ordering::Relaxed) {
+            let next_packet = capture_client
+                .get_next_packet_size()
+                .map_err(|error| format!("WASAPI packet query failed: {error}"))?;
+
+            match next_packet {
+                Some(frame_count) if frame_count > 0 => {
+                    let byte_count = frame_count as usize * bytes_per_frame;
+                    let mut buffer = vec![0_u8; byte_count];
+
+                    let (frames_read, _) = capture_client
+                        .read_from_device(&mut buffer)
+                        .map_err(|error| format!("WASAPI audio read failed: {error}"))?;
+
+                    let data_length = frames_read as usize * bytes_per_frame;
+                    buffer.truncate(data_length);
+
+                    if !buffer.is_empty() {
+                        match audio_sender.try_send(buffer) {
+                            Ok(()) => {}
+                            Err(TrySendError::Disconnected(_)) => {
+                                return Err(
+                                    "Audio pipe writer stopped unexpectedly.".to_string()
+                                );
+                            }
+                            Err(TrySendError::Full(buffer)) => {
+                                if drop_receiver.try_recv().is_ok() {
+                                    dropped_packets = dropped_packets.saturating_add(1);
+                                }
+
+                                match audio_sender.try_send(buffer) {
+                                    Ok(()) => {}
+                                    Err(TrySendError::Full(_)) => {
+                                        dropped_packets =
+                                            dropped_packets.saturating_add(1);
+                                    }
+                                    Err(TrySendError::Disconnected(_)) => {
+                                        return Err(
+                                            "Audio pipe writer stopped unexpectedly.".to_string()
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    total_bytes = total_bytes.saturating_add(data_length as u64);
+                }
+                _ => thread::sleep(Duration::from_millis(2)),
+            }
+
+            if last_report.elapsed() >= Duration::from_secs(1) {
+                crate::ipc::write_message(
+                    &output,
+                    json!({
+                        "type": "capture_stats",
+                        "total_bytes": total_bytes,
+                        "dropped_packets": dropped_packets,
+                        "queue_capacity": AUDIO_QUEUE_CAPACITY,
+                        "sample_rate": sample_rate,
+                        "channels": channels,
+                        "sample_type": sample_type_name,
+                        "bits_per_sample": bits_per_sample,
+                        "valid_bits_per_sample": valid_bits_per_sample,
+                        "bytes_per_frame": bytes_per_frame,
+                        "average_bytes_per_second": average_bytes_per_second,
+                        "channel_mask": channel_mask
+                    }),
+                )
+                .map_err(|error| format!("Could not report capture statistics: {error}"))?;
+
+                last_report = Instant::now();
+            }
+        }
+
+        Ok(())
+    })();
+
     let _ = audio_client.stop_stream();
+
+    drop(audio_sender);
+
+    let writer_result = writer_worker
+        .join()
+        .map_err(|_| "Audio pipe writer thread panicked.".to_string())?;
+
+    capture_result?;
+    writer_result?;
+
+    Ok(())
+}
+
+#[cfg(windows)]
+fn write_audio_pipe_packets(
+    mut audio_pipe: std::fs::File,
+    receiver: crossbeam_channel::Receiver<Vec<u8>>,
+) -> Result<(), String> {
+    use std::io::Write;
+
+    while let Ok(buffer) = receiver.recv() {
+        let frame_length = u32::try_from(buffer.len())
+            .map_err(|error| format!("Invalid audio frame length: {error}"))?;
+
+        audio_pipe
+            .write_all(&frame_length.to_le_bytes())
+            .and_then(|_| audio_pipe.write_all(&buffer))
+            .map_err(|error| format!("Could not forward captured audio: {error}"))?;
+    }
+
     Ok(())
 }
 

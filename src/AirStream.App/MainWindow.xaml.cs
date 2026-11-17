@@ -284,11 +284,12 @@ public partial class MainWindow : Window
                     var sampleType = message.GetProperty("sample_type").GetString();
                     var bitsPerSample = message.GetProperty("bits_per_sample").GetUInt16();
                     var validBits = message.GetProperty("valid_bits_per_sample").GetUInt16();
+                    var droppedPackets = message.GetProperty("dropped_packets").GetUInt64();
 
                     StatusText.Text =
                         $"{sampleRate / 1000.0:F1} kHz | {channels} ch | " +
                         $"{sampleType} {bitsPerSample}/{validBits} bit | " +
-                        $"{receivedBytes:N0} bytes";
+                        $"{receivedBytes:N0} bytes | dropped: {droppedPackets}";
 
                     break;
                 }
